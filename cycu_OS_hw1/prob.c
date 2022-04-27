@@ -2,6 +2,12 @@
 #include <stdio.h>
 #include <pthread.h>
 #include <string.h>
+#include <sys/mman.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
 #define PATH_LENGTH 64
 #define DATA_LENGTH 500001
 struct ThreadArgs{
@@ -42,6 +48,8 @@ void* bubbleSort(void* args){
     pthread_exit(NULL);
 
 }
+
+
 
 //in this function, we copy a new array from data, then perform merge, then copy the finisted
 //data back to int* data;
@@ -115,7 +123,7 @@ void mergeSort(int* data, int* cutPoint,int k, int data_count){
             start = cutPoint[slice]+1;
             end = cutPoint[slice+2*i];
             mid = cutPoint[slice+i];
- //           printf("Args range from %d to %d , mid = %d\n",start,end,mid);
+         //   printf("Args range from %d to %d , mid = %d\n",start,end,mid);
             merge(data,start,mid,end);
             slice+=epoch;
         }
@@ -123,14 +131,8 @@ void mergeSort(int* data, int* cutPoint,int k, int data_count){
     mid = end;
     start = 0;
     end = data_count-1;
-//    printf("Args range from %d to %d , mid = %d\n",start,end,mid);
+  //  printf("Args range from %d to %d , mid = %d\n",start,end,mid);
     merge(data,start,mid,end);
-}
-
-
-void sortWithProcess(int* temp,int data_count,int k){
-    int* data = malloc(sizeof(int)*data_count);
-
 }
 
 
@@ -147,14 +149,13 @@ struct Package sliceData(int* data,int data_count,int k){
     for(int i=0;i<k-1;i++){
         args[i].data = data;
         args[i].start = track+1;
- //       printf("Part %d args range from %d to ",i+1,track+1);
+      //  printf("Part %d args range from %d to ",i+1,track+1);
         track+=interval;
- //       printf("%d\n",track);
         args[i].end = track;
         cutPoint[i+1] = track;
     }
     //the remaining part
-//    printf("last part args range from %d to %d\n",track+1,data_count-1);
+ //   printf("last part args range from %d to %d\n",track+1,data_count-1);
     args[k-1].data = data;
     args[k-1].start = track+1;
     args[k-1].end = data_count-1;
@@ -181,6 +182,41 @@ void sortWithThread(int* temp,int data_count,int k){
         printArray(data,data_count);
     }
 }
+
+void sortWithProcess(int* temp,int data_count,int k){
+    int* data;
+    data = (int*)mmap(NULL,sizeof(int)*data_count,PROT_WRITE | PROT_READ,MAP_SHARED | MAP_ANONYMOUS,-1,0);
+    if(data == MAP_FAILED){
+        perror("ERROR ");
+        return;
+    }
+    for(int i=0;i<data_count;i++){
+        data[i] = temp[i];
+    }
+    
+    struct Package processed_data = sliceData(data,data_count,k);
+    int pid[k];
+    for(int i=0;i<k;i++){
+        pid[i] = fork();
+        if(pid[i]==0){
+            bubbleSort((void*)&processed_data.args[i]);
+            exit(0);
+        }
+        else{
+            continue;
+        }
+    }
+    for(int i=0;i<k;i++){
+        wait(NULL);
+    }
+    mergeSort(data,processed_data.cutPoint,k,data_count);
+    if(checkResult(data,data_count) == 1){
+        printArray(data,data_count);
+    }
+
+
+}
+
 
 
 
@@ -217,13 +253,6 @@ int main(int argc,char** argv){
             printf("no.");
             break;
     }
-
-
-    // while(!feof(fd)){
-    //     fscanf(fd,"%d",&data);
-    //     printf("%d\n",data);
-    // }
-
     fclose(fd);
     return 0;
 
