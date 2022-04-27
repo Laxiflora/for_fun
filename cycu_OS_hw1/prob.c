@@ -1,0 +1,215 @@
+#include <stdlib.h>
+#include <stdio.h>
+#include <pthread.h>
+#include <string.h>
+#define PATH_LENGTH 64
+#define DATA_LENGTH 500001
+
+struct ThreadArgs{
+    int* data;
+    int start;
+    int end;
+};
+
+void* bubbleSort(void* args){
+    struct ThreadArgs* input = (struct ThreadArgs*)args;
+    if(input->start > input-> end){  // no need to sort
+        pthread_exit(NULL);
+    }
+    int start = input->start;
+    int end = input->end;
+    for(int i=start;i<=end;i++){
+        for(int j=start;j<=end;j++){
+            if(input->data[i]<input->data[j]){
+                int temp = input->data[i];
+                input->data[i] = input->data[j];
+                input->data[j] = temp;
+            }
+        }
+    }
+    for(int i=start;i<=end;i++){
+        for(int j=i+1;j<=end;j++){
+            if(input->data[i]>input->data[j]){
+                printf("Bubble Result Wrong!\n");
+                pthread_exit(NULL);
+            }
+        }
+    }
+    pthread_exit(NULL);
+
+}
+
+//in this function, we copy a new array from data, then perform merge, then copy the finisted
+//data back to int* data;
+void merge(int* data, int start , int middle , int end){
+    if(start>middle){ //no need to sort
+        return;
+    }
+    int temp[end-start+1];
+    for(int i=start,j=0;i<=end;i++,j++){
+        temp[j] = data[i];
+       // printf("%d\t",temp[j]);
+    }
+    int mid = middle - start;
+    int left = 0;
+    int right = mid+1;
+    int index = start;
+    int tail = end-start;
+    while(left<=mid && right <= tail){
+        if(temp[left]<=temp[right]){
+            data[index++] = temp[left++];
+        }
+        else{
+            data[index++] = temp[right++];
+        }
+    }
+    while(left<=mid){
+        data[index++] = temp[left++];
+    }
+    while(right<=tail){
+        data[index++] = temp[right++];
+    }
+    if(index-1 != end){
+    }
+
+}
+
+
+void printArray(int* data,int data_count){
+    FILE* fd = fopen("output/myout","w+");
+    if(fd == NULL){
+        perror("Error ");
+        return;
+    }
+    for(int i=0;i<data_count;i++){
+        char out[34] = {'\0'};
+        sprintf(out,"%d",data[i]);
+        fwrite(out, sizeof( char ), strlen( out ), fd);
+        fwrite("\n", sizeof( char ), strlen( "\n" ), fd);
+    }
+    fclose(fd);
+}
+void mergeSort(int* data, int* cutPoint,int k, int data_count){
+    int slice=0;  //we need this variable to fit the interval so it can merge perfectly
+    int end=0;
+    int start=0;
+    int mid=0;
+    for(int epoch = 2,i=1;i< k+1 ;i*=2,epoch*=2){
+        slice=0;  //we need this variable to fit the interval so it can merge perfectly
+      //  printf("round %d, interval = %d\n",round,interval);
+        while((slice+2*i)<k+2){
+            start = cutPoint[slice]+1;
+            end = cutPoint[slice+2*i];
+            mid = cutPoint[slice+i];
+            printf("Args range from %d to %d , mid = %d\n",start,end,mid);
+            merge(data,start,mid,end);
+            slice+=epoch;
+        }
+    }
+    mid = end;
+    start = 0;
+    end = data_count-1;
+    printf("Args range from %d to %d , mid = %d\n",start,end,mid);
+    merge(data,start,mid,end);
+}
+
+
+void sortWithProcess(int* temp,int data_count,int k){
+    int* data = malloc(sizeof(int)*data_count);
+
+}
+void sortWithThread(int* temp,int data_count,int k){
+    int cutPoint[k+1];
+    cutPoint[0]=-1;
+    int* data = malloc(sizeof(int)*data_count);
+    for(int i=0;i<data_count;i++){
+        data[i] = temp[i];
+    }
+    pthread_t t[k];
+    int interval = data_count/k;
+    struct ThreadArgs args[k];
+    int track = -1;
+    //cut the data into k-1 part
+    for(int i=0;i<k-1;i++){
+        args[i].data = data;
+        args[i].start = track+1;
+        printf("Part %d args range from %d to ",i+1,track+1);
+        track+=interval;
+        printf("%d\n",track);
+        args[i].end = track;
+        cutPoint[i+1] = track;
+        pthread_create(&(t[i]), NULL, bubbleSort, (void*)&args[i]); // 建立子執行緒
+    }
+    //the remaining part
+    printf("last part args range from %d to %d\n",track+1,data_count-1);
+    args[k-1].data = data;
+    args[k-1].start = track+1;
+    args[k-1].end = data_count-1;
+    cutPoint[k] = args[k-1].end;
+    pthread_create(&(t[k-1]), NULL, bubbleSort, (void*)&args[k-1]); // 建立子執行緒
+    for(int i=0;i<k;i++){
+        pthread_join(t[i],NULL);
+    }
+    for(int i=0;i<k+1;i++){
+        printf("%d\n",cutPoint[i]);
+    }
+    mergeSort(data,cutPoint,k,data_count);
+
+    for(int i=0;i<data_count;i++){
+        for(int j=i+1;j<data_count;j++){
+            if(data[i]>data[j]){
+                printf("Result Wrong! when i= %d, j=%d\n",i,j);
+                return;
+            }
+        }
+    }
+    printArray(data,data_count);
+}
+
+
+
+
+int main(int argc,char** argv){
+    char path[PATH_LENGTH+1];
+    printf("file path:\n");
+    scanf("%s",path);
+    FILE* fd = fopen(path,"r");
+    if(fd == NULL){
+        perror("Error ");
+        return 0;
+    }
+    int input[DATA_LENGTH];
+    int data_count = 0;
+    for(int i=0;!feof(fd);i++){
+        fscanf(fd,"%d",&input[i]);
+        data_count++;
+    }
+    printf("cut to k slice:\n");
+    int k;
+    scanf("%d",&k);
+    printf("enter method number:\n");
+    int method;
+    scanf("%d",&method);
+    switch(method){
+        case 3:
+            sortWithProcess(input,data_count,k);
+            break;
+        case 4:
+            sortWithThread(input,data_count,k);
+            break;
+        default:
+            printf("no.");
+            break;
+    }
+
+
+    // while(!feof(fd)){
+    //     fscanf(fd,"%d",&data);
+    //     printf("%d\n",data);
+    // }
+
+    fclose(fd);
+    return 0;
+
+
+}
