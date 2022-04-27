@@ -4,11 +4,15 @@
 #include <string.h>
 #define PATH_LENGTH 64
 #define DATA_LENGTH 500001
-
 struct ThreadArgs{
     int* data;
     int start;
     int end;
+};
+
+struct Package{
+    struct ThreadArgs* args;
+    int* cutPoint;
 };
 
 void* bubbleSort(void* args){
@@ -74,6 +78,17 @@ void merge(int* data, int start , int middle , int end){
 
 }
 
+int checkResult(int* data, int data_count){
+    for(int i=0;i<data_count;i++){
+        for(int j=i+1;j<data_count;j++){
+            if(data[i]>data[j]){
+                printf("Result Wrong! when i= %d, j=%d\n",i,j);
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
 
 void printArray(int* data,int data_count){
     FILE* fd = fopen("output/myout","w+");
@@ -96,12 +111,11 @@ void mergeSort(int* data, int* cutPoint,int k, int data_count){
     int mid=0;
     for(int epoch = 2,i=1;i< k+1 ;i*=2,epoch*=2){
         slice=0;  //we need this variable to fit the interval so it can merge perfectly
-      //  printf("round %d, interval = %d\n",round,interval);
-        while((slice+2*i)<k+2){
+        while((slice+2*i)<k+1){
             start = cutPoint[slice]+1;
             end = cutPoint[slice+2*i];
             mid = cutPoint[slice+i];
-            printf("Args range from %d to %d , mid = %d\n",start,end,mid);
+ //           printf("Args range from %d to %d , mid = %d\n",start,end,mid);
             merge(data,start,mid,end);
             slice+=epoch;
         }
@@ -109,7 +123,7 @@ void mergeSort(int* data, int* cutPoint,int k, int data_count){
     mid = end;
     start = 0;
     end = data_count-1;
-    printf("Args range from %d to %d , mid = %d\n",start,end,mid);
+//    printf("Args range from %d to %d , mid = %d\n",start,end,mid);
     merge(data,start,mid,end);
 }
 
@@ -118,52 +132,54 @@ void sortWithProcess(int* temp,int data_count,int k){
     int* data = malloc(sizeof(int)*data_count);
 
 }
-void sortWithThread(int* temp,int data_count,int k){
-    int cutPoint[k+1];
-    cutPoint[0]=-1;
-    int* data = malloc(sizeof(int)*data_count);
-    for(int i=0;i<data_count;i++){
-        data[i] = temp[i];
-    }
-    pthread_t t[k];
+
+
+struct Package sliceData(int* data,int data_count,int k){
     int interval = data_count/k;
-    struct ThreadArgs args[k];
+    struct Package _return;
+    _return.cutPoint = malloc(sizeof(int)*(k+1));
+    int * cutPoint = _return.cutPoint;
+    cutPoint[0]=-1;
+    _return.args = malloc(sizeof(struct ThreadArgs)*k);
+    struct ThreadArgs* args = _return.args;
     int track = -1;
     //cut the data into k-1 part
     for(int i=0;i<k-1;i++){
         args[i].data = data;
         args[i].start = track+1;
-        printf("Part %d args range from %d to ",i+1,track+1);
+ //       printf("Part %d args range from %d to ",i+1,track+1);
         track+=interval;
-        printf("%d\n",track);
+ //       printf("%d\n",track);
         args[i].end = track;
         cutPoint[i+1] = track;
-        pthread_create(&(t[i]), NULL, bubbleSort, (void*)&args[i]); // 建立子執行緒
     }
     //the remaining part
-    printf("last part args range from %d to %d\n",track+1,data_count-1);
+//    printf("last part args range from %d to %d\n",track+1,data_count-1);
     args[k-1].data = data;
     args[k-1].start = track+1;
     args[k-1].end = data_count-1;
     cutPoint[k] = args[k-1].end;
-    pthread_create(&(t[k-1]), NULL, bubbleSort, (void*)&args[k-1]); // 建立子執行緒
+    return _return;
+}
+
+
+void sortWithThread(int* temp,int data_count,int k){
+    int* data = malloc(sizeof(int)*data_count);
+    for(int i=0;i<data_count;i++){
+        data[i] = temp[i];
+    }
+    pthread_t t[k];
+    struct Package processed_data = sliceData(data,data_count,k);
+    for(int i=0;i<k;i++){
+        pthread_create(&(t[i]), NULL, bubbleSort, (void*)&processed_data.args[i]); // 建立子執行緒
+    }
     for(int i=0;i<k;i++){
         pthread_join(t[i],NULL);
     }
-    for(int i=0;i<k+1;i++){
-        printf("%d\n",cutPoint[i]);
+    mergeSort(data,processed_data.cutPoint,k,data_count);
+    if(checkResult(data,data_count) == 1){
+        printArray(data,data_count);
     }
-    mergeSort(data,cutPoint,k,data_count);
-
-    for(int i=0;i<data_count;i++){
-        for(int j=i+1;j<data_count;j++){
-            if(data[i]>data[j]){
-                printf("Result Wrong! when i= %d, j=%d\n",i,j);
-                return;
-            }
-        }
-    }
-    printArray(data,data_count);
 }
 
 
