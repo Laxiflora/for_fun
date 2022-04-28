@@ -21,6 +21,33 @@ struct Package{
     int* cutPoint;
 };
 
+void _bubbleSort(void* args){
+    struct ThreadArgs* input = (struct ThreadArgs*)args;
+    if(input->start > input-> end){  // no need to sort
+        return;
+    }
+    int start = input->start;
+    int end = input->end;
+    for(int i=start;i<=end;i++){
+        for(int j=start;j<=end;j++){
+            if(input->data[i]<input->data[j]){
+                int temp = input->data[i];
+                input->data[i] = input->data[j];
+                input->data[j] = temp;
+            }
+        }
+    }
+    // for(int i=start;i<=end;i++){
+    //     for(int j=i+1;j<=end;j++){
+    //         if(input->data[i]>input->data[j]){
+    //             printf("Bubble Result Wrong!\n");
+    //             return;
+    //         }
+    //     }
+    // }
+    return;
+}
+
 void* bubbleSort(void* args){
     struct ThreadArgs* input = (struct ThreadArgs*)args;
     if(input->start > input-> end){  // no need to sort
@@ -37,14 +64,14 @@ void* bubbleSort(void* args){
             }
         }
     }
-    for(int i=start;i<=end;i++){
-        for(int j=i+1;j<=end;j++){
-            if(input->data[i]>input->data[j]){
-                printf("Bubble Result Wrong!\n");
-                pthread_exit(NULL);
-            }
-        }
-    }
+    // for(int i=start;i<=end;i++){
+    //     for(int j=i+1;j<=end;j++){
+    //         if(input->data[i]>input->data[j]){
+    //             printf("Bubble Result Wrong!\n");
+    //             pthread_exit(NULL);
+    //         }
+    //     }
+    // }
     pthread_exit(NULL);
 
 }
@@ -123,7 +150,7 @@ void mergeSort(int* data, int* cutPoint,int k, int data_count){
             start = cutPoint[slice]+1;
             end = cutPoint[slice+2*i];
             mid = cutPoint[slice+i];
-         //   printf("Args range from %d to %d , mid = %d\n",start,end,mid);
+            printf("Args range from %d to %d , mid = %d\n",start,end,mid);
             merge(data,start,mid,end);
             slice+=epoch;
         }
@@ -131,7 +158,7 @@ void mergeSort(int* data, int* cutPoint,int k, int data_count){
     mid = end;
     start = 0;
     end = data_count-1;
-  //  printf("Args range from %d to %d , mid = %d\n",start,end,mid);
+    printf("Args range from %d to %d , mid = %d\n",start,end,mid);
     merge(data,start,mid,end);
 }
 
@@ -163,8 +190,45 @@ struct Package sliceData(int* data,int data_count,int k){
     return _return;
 }
 
+void bubbleSortWithSingleProcess(int* temp,int data_count,int k){
+    printf("select method: bubble sort using single process.\n");
+    int* data = malloc(sizeof(int)*data_count);
+    for(int i=0;i<data_count;i++){
+        data[i] = temp[i];
+    }
+    struct Package processed_data = sliceData(data,data_count,k);
+    processed_data.args[0].start = 0;
+    processed_data.args[0].end = data_count-1;
+    processed_data.args[0].data = data;
+    _bubbleSort((void*)&processed_data.args[0]);
+    // if(checkResult(data,data_count) == 1){
+    //       printArray(data,data_count);
+    // }
+}
+
+void sortWithSingleProcess(int* temp,int data_count,int k){
+    printf("select method: k-way merge sort using single process.\n");
+    int* data = malloc(sizeof(int)*data_count);
+    for(int i=0;i<data_count;i++){
+        data[i] = temp[i];
+    }
+    struct Package processed_data = sliceData(data,data_count,k);
+    for(int i=0;i<k;i++){
+        printf("bubble from %d to %d \n",processed_data.args[i].start,processed_data.args[i].end);
+        _bubbleSort((void*)&processed_data.args[i]);
+    }
+    mergeSort(data,processed_data.cutPoint,k,data_count);
+    // if(checkResult(data,data_count) == 1){
+    //     printArray(data,data_count);
+    // }
+}
+
+
+
+
 
 void sortWithThread(int* temp,int data_count,int k){
+    printf("select method: k-way merge sort using %d multithread.\n",k);
     int* data = malloc(sizeof(int)*data_count);
     for(int i=0;i<data_count;i++){
         data[i] = temp[i];
@@ -178,12 +242,13 @@ void sortWithThread(int* temp,int data_count,int k){
         pthread_join(t[i],NULL);
     }
     mergeSort(data,processed_data.cutPoint,k,data_count);
-    if(checkResult(data,data_count) == 1){
-        printArray(data,data_count);
-    }
+    // if(checkResult(data,data_count) == 1){
+    //       printArray(data,data_count);
+    // }
 }
 
 void sortWithProcess(int* temp,int data_count,int k){
+    printf("select method: k-way merge sort using %d multiprocess.\n",k);
     int* data;
     data = (int*)mmap(NULL,sizeof(int)*data_count,PROT_WRITE | PROT_READ,MAP_SHARED | MAP_ANONYMOUS,-1,0);
     if(data == MAP_FAILED){
@@ -210,9 +275,9 @@ void sortWithProcess(int* temp,int data_count,int k){
         wait(NULL);
     }
     mergeSort(data,processed_data.cutPoint,k,data_count);
-    if(checkResult(data,data_count) == 1){
-        printArray(data,data_count);
-    }
+    // if(checkResult(data,data_count) == 1){
+    //       printArray(data,data_count);
+    // }
 
 
 }
@@ -243,6 +308,12 @@ int main(int argc,char** argv){
     int method;
     scanf("%d",&method);
     switch(method){
+        case 2:
+            sortWithSingleProcess(input,data_count,k);
+            break;
+        case 1:
+            bubbleSortWithSingleProcess(input,data_count,k);
+            break;
         case 3:
             sortWithProcess(input,data_count,k);
             break;
